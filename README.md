@@ -7,6 +7,8 @@ DraftMind 不是帮你代写文章的 AI 工具。它像一个坐在你旁边的
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Next.js](https://img.shields.io/badge/Next.js-14-black)](https://nextjs.org/)
 
+**在线体验：** https://draftmind-blush.vercel.app
+
 ---
 
 ## 四阶段工作流
