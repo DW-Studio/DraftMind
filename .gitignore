@@ -48,3 +48,5 @@ plans/
 
 # test
 coverage/
+
+.vercel
