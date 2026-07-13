@@ -33,7 +33,9 @@ DraftMind 不是帮你代写文章的 AI 工具。它像一个坐在你旁边的
 ### 前置条件
 
 - Node.js 18+
-- [AIHubMix API Key](https://aihubmix.com)（免费注册）
+- [AIHubMix API Key](https://aihubmix.com)
+- 或[OpenRouter API Key](https://openrouter.ai/)
+- 或官方
 
 ### 安装
 
@@ -48,22 +50,16 @@ npm run dev
 
 ### 配置
 
-首次打开会弹出配置向导，填入 AIHubMix API Key 和 Base URL：
+首次打开会弹出配置向导，填入API Key 和 Base URL：
 
 ```
 API Key:  sk-xxxxxxxx
-Base URL: https://aihubmix.com/v1
+Base URL: https://aihubmix.com
 ```
 
 ---
 
-## 一键部署到 Vercel
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/DW-Studio/DraftMind)
-
-点击按钮 → 授权 GitHub → 填入环境变量 `AIHUBMIX_API_KEY` → 完成。
-
----
 
 ## 技术栈
 
