@@ -285,7 +285,12 @@ export function AIPanel() {
                         clearDiagnosis();
                         setActiveStage(nextStage);
                         const textToAnalyze = selectedText || currentArticle?.content?.trim() || '';
-                        if (textToAnalyze) {
+                        // 检查当前阶段是否有 workbench 输出作为上下文
+                        const hasWbContext =
+                          (activeStage === 'material' && !!workbench.materialOutput) ||
+                          (activeStage === 'framework' && !!workbench.frameworkOutput) ||
+                          (activeStage === 'writing' && !!workbench.writingOutput);
+                        if (textToAnalyze || hasWbContext) {
                           setTimeout(() => {
                             startDiagnosis(textToAnalyze);
                           }, 50);
