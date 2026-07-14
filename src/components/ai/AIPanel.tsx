@@ -113,7 +113,12 @@ export function AIPanel() {
     if (isStreaming) return;
     // 优先使用选中文本，否则使用编辑器全文
     const textToAnalyze = selectedText || currentArticle?.content?.trim() || '';
-    if (!textToAnalyze) return;
+    // 非第一阶段：如果 workbench 已有前序输出，允许无编辑器内容诊断
+    const hasWorkbenchContext =
+      (activeStage === 'framework' && !!workbench.materialOutput) ||
+      (activeStage === 'writing' && !!workbench.frameworkOutput) ||
+      (activeStage === 'coaching' && !!workbench.writingOutput);
+    if (!textToAnalyze && !hasWorkbenchContext) return;
     startDiagnosis(textToAnalyze);
   };
 

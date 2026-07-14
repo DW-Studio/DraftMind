@@ -804,7 +804,12 @@ export const useStore = create<Store>()(
             });
             return;
           }
-          if (!selectedText || selectedText.trim().length === 0) {
+          const wbForGuard = get().workbench;
+          const hasPreviousOutput = 
+            (activeStage === 'framework' && !!wbForGuard.materialOutput) ||
+            (activeStage === 'writing' && !!wbForGuard.frameworkOutput) ||
+            (activeStage === 'coaching' && !!wbForGuard.writingOutput);
+          if ((!selectedText || selectedText.trim().length === 0) && !hasPreviousOutput) {
             set({
               diagnosisError: "未选中文本，请先在编辑器中划选需要诊断的内容",
               isStreaming: false,
