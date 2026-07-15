@@ -6,6 +6,13 @@ import { useStore } from "@/store";
 import { SettingsModal } from "@/components/SettingsModal";
 import { WorkflowStage } from "@/types/store";
 
+const INTENT_OPTIONS = [
+  { id: 'intro', label: '📝 介绍一个产品', desc: '产品介绍，面向用户或读者' },
+  { id: 'opinion', label: '💡 分享一个观点', desc: '表达看法，论证观点' },
+  { id: 'tutorial', label: '📚 写一篇教程', desc: '教读者学会某件事' },
+  { id: 'free', label: '✍️ 自由写作', desc: '不限定方向，AI 帮你理思路' },
+];
+
 // ============================================================
 // AIPanel — AI 诊断面板
 // 位于右侧 40% 区域，支持 light/dark mode
@@ -56,6 +63,7 @@ export function AIPanel() {
 
   // ---- 写作工作台 ----
   const workbench = useStore((s) => s.workbench);
+  const setArticleIntent = useStore((s) => s.setArticleIntent);
   const stages: WorkflowStage[] = ['material', 'framework', 'writing', 'coaching'];
   const activeStageIndex = stages.indexOf(activeStage);
   const stageLabels: Record<WorkflowStage, string> = {
@@ -318,8 +326,38 @@ export function AIPanel() {
       <div className="rounded-lg border border-dashed border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/30 px-4 py-8 text-center">
         {activeStage === 'material' && (
           <>
-            <p className="text-sm text-zinc-400 dark:text-zinc-500">素材分析</p>
-            <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">👉 在编辑器中输入素材，AI 会对论点进行压力测试，找出薄弱点并给出加固建议。</p>
+            {!workbench.articleIntent ? (
+              <>
+                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-3">你要写什么？</p>
+                <div className="grid grid-cols-1 gap-2">
+                  {INTENT_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.id}
+                      onClick={() => setArticleIntent(opt.id)}
+                      className="flex flex-col items-start rounded-lg border border-zinc-200 dark:border-zinc-700 px-3 py-2.5 text-left hover:border-blue-400 hover:bg-blue-50 dark:hover:border-blue-500 dark:hover:bg-blue-900/20 transition-colors cursor-pointer"
+                    >
+                      <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200">{opt.label}</span>
+                      <span className="text-xs text-zinc-400">{opt.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    {INTENT_OPTIONS.find((o) => o.id === workbench.articleIntent)?.label || '已选意图'}
+                  </span>
+                  <button
+                    onClick={() => setArticleIntent('')}
+                    className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 cursor-pointer"
+                  >
+                    更改
+                  </button>
+                </div>
+                <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">👉 在编辑器中输入素材，AI 会根据你的意图进行施压测试，找出薄弱点并给出加固建议。</p>
+              </>
+            )}
           </>
         )}
         {activeStage === 'framework' && (

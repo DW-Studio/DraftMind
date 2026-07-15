@@ -182,6 +182,8 @@ export interface StoreState {
     writingOutput: string;
     coachingOutput: string;
     completedStages: WorkflowStage[];
+    /** 用户选定的文章意图，影响所有阶段的 prompt 行为 */
+    articleIntent: string | null;
   };
 }
 
@@ -274,6 +276,8 @@ export interface StoreActions {
   setActiveStage: (stage: WorkflowStage) => void;
   /** 切换教练模式 */
   setCoachMode: (enabled: boolean) => void;
+  /** 设置文章意图（新建文章时选定，影响所有阶段 prompt） */
+  setArticleIntent: (intent: string) => void;
   /** 原地编辑：更新指定阶段的工作台输出 */
   updateWorkbenchOutput: (stage: WorkflowStage, content: string) => void;
 

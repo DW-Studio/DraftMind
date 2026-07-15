@@ -312,6 +312,7 @@ function getInitialState(): StoreState {
       writingOutput: '',
       coachingOutput: '',
       completedStages: [],
+      articleIntent: null,
     },
   };
 }
@@ -650,6 +651,7 @@ export const useStore = create<Store>()(
               writingOutput: '',
               coachingOutput: '',
               completedStages: [],
+              articleIntent: null,
             },
             diagnosisStream: '',
             diagnosisError: null,
@@ -703,6 +705,10 @@ export const useStore = create<Store>()(
         },
         
         setCoachMode: (enabled: boolean) => set({ coachMode: enabled }),
+
+        /** 设置文章意图 */
+        setArticleIntent: (intent: string) =>
+          set((s) => ({ workbench: { ...s.workbench, articleIntent: intent } })),
 
         /** 原地编辑：更新指定阶段的工作台输出，同时同步到 diagnosisStream */
         updateWorkbenchOutput: (stage: WorkflowStage, content: string) => {
@@ -823,8 +829,22 @@ export const useStore = create<Store>()(
           // 获取阶段任务提示词
           const stageTaskPrompt = STAGE_TASK_PROMPTS[activeStage];
           
-          // 构建最终的系统提示词（任务提示词 + 文风 + 范例）
-          let systemContent = `${stageTaskPrompt}\n\n【当前遵循的写作风格】：\n${style.systemPrompt}\n\n【参考范例】：\n${style.fewShots.join('\n')}`;
+          // 构建最终的系统提示词（任务提示词 + 意图 + 文风 + 范例）
+          let systemContent = `${stageTaskPrompt}`;
+          
+          // 注入用户选定的文章意图
+          if (state.workbench.articleIntent) {
+            const intentHints: Record<string, string> = {
+              intro: '\n\n【用户文章意图】用户想写一篇产品介绍类文章。施压测试时请侧重：目标用户是否能理解产品价值、介绍逻辑是否清晰、是否遗漏了用户关心的关键信息。',
+              opinion: '\n\n【用户文章意图】用户想写一篇观点类文章。施压测试时请侧重：论证是否严密、核心论点是否有足够证据支撑、是否预判并回应了可能的反驳。',
+              tutorial: '\n\n【用户文章意图】用户想写一篇教程类文章。施压测试时请侧重：步骤是否完整清晰、读者能否跟着操作、术语是否被解释清楚、是否存在知识跳跃。',
+              free: '',
+            };
+            const hint = intentHints[state.workbench.articleIntent] || '';
+            systemContent += hint;
+          }
+          
+          systemContent += `\n\n【当前遵循的写作风格】：\n${style.systemPrompt}\n\n【参考范例】：\n${style.fewShots.join('\\n')}`;
           
           // 如果是coaching阶段且开启了coachMode，添加反向抹杀指令
           if (activeStage === 'coaching' && coachMode) {
