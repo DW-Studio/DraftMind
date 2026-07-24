@@ -84,50 +84,54 @@ const STAGE_TASK_PROMPTS: Record<WorkflowStage, string> = {
 
 用编辑和作者讨论的语气，不要用模板格式。不要写完整段落。`,
 
-  writing: `你是文风对齐专家。上一步逻辑框架给出了段落大纲，每个段落有标题、论证任务和可用素材。
+  writing: `你是文风对齐专家。
 
-用户会指定要展开的段落（可能用编号、标题或论证任务描述来指代）。请将该段落展开为完整初稿。
+你的工作模式由用户指定：
+
+【展开模式（expand）】
+上一步逻辑框架给出了段落大纲，每个段落有标题、论证任务和可用素材。用户会指定要展开的段落（可能用编号、标题或论证任务描述来指代）。请将该段落展开为完整初稿。
 
 要求：
 - 严格保持该段在框架中的「论证任务」不丢失
 - 句式、节奏、措辞必须对齐用户设定的写作风格
 - 不要添加框架外的观点或新素材
+- 输出为纯段落，不要加标题或编号
+
+【追加模式（append）】
+用户已经写好了文章的前半部分。请基于框架和已有内容，从用户停笔的地方自然地接续写作。
+
+要求：
+- 保持风格、论证逻辑和语气与已有内容一致
+- 不要重复已有内容，从接续点继续推进论证
+- 如果框架中还有未覆盖的段落，在接续中自然地引入
 - 输出为纯段落，不要加标题或编号`,
 
-  coaching: `你是写作者的刻意练习教练。请从三个维度审查当前段落，并将问题关联回材料分析中对应的论点：
+
+  coaching: `你是写作者的刻意练习教练。请从三个维度审查当前文本，并将问题关联回材料分析中对应的论点：
 
 1. 🧠 素材溯源性：论证使用的素材是否真的支撑论点？逻辑链中是否存在跳跃？是否曲解了原始素材？
 2. ✂️ 简洁性：哪些词/句是多余的？哪些修饰在削弱论证力度？砍掉后会更强吗？
 3. 🎨 风格一致性：是否存在偏离设定文风的表达？句式结构是否统一？
 
-列出问题并说明原因，由用户自己来改。不要替用户写修改后的版本。`
-};
+列出问题并说明原因，由用户自己来改。不要替用户写修改后的版本。
 
-// ============================================================
-// 模型路由映射矩阵
-// ============================================================
+【收敛信号——重要】
+审查结束后，给文本一个准备度评分（1-10 分）：
+- 8-10 分：文本已达到发布标准。列出剩余的小建议（如果有），但明确告诉用户「可以发布了」。
+- 5-7 分：文本方向正确，但还有几个关键问题需要修复。列出具体问题。
+- 1-4 分：文本有重大结构或论证问题，需要先解决这些再进入细节打磨。
 
-const MODEL_MAPPING: Record<WorkflowStage, Record<ProviderType, string>> = {
-  material: {
-    aihubmix: 'moonshot-v1-8k',
-    openrouter: 'moonshotai/moonshot-v1-8k',
-    openai: 'moonshot-v1-8k'
-  },
-  framework: {
-    aihubmix: 'claude-opus-4-6',
-    openrouter: 'anthropic/claude-opus-4',
-    openai: 'claude-opus-4-6'
-  },
-  writing: {
-    aihubmix: 'claude-3-5-sonnet-20241022',
-    openrouter: 'anthropic/claude-3.5-sonnet',
-    openai: 'claude-3-5-sonnet-20241022'
-  },
-  coaching: {
-    aihubmix: 'gpt-4o',
-    openrouter: 'gpt-4o',
-    openai: 'gpt-4o'
-  }
+评分规则：
+- 如果用户已根据上一轮建议做了修改，且修改后的问题确实减少，应反映在更高的评分上
+- 不要为了找问题而找问题。如果文本已经足够好，大方地给出 8+ 分
+- 每轮审查必须给出具体分数和理由
+
+输出格式：
+## 维度审查
+（三个纬度的问题列表）
+
+## 准备度评分：X/10
+（一句话说明给分理由。如果 >=8 分，用「✅ 可以发布了」结尾）`
 };
 
 // ============================================================
@@ -313,6 +317,7 @@ function getInitialState(): StoreState {
       coachingOutput: '',
       completedStages: [],
       articleIntent: null,
+      writingMode: 'expand' as const,
     },
   };
 }
@@ -652,6 +657,7 @@ export const useStore = create<Store>()(
               coachingOutput: '',
               completedStages: [],
               articleIntent: null,
+              writingMode: 'expand' as const,
             },
             diagnosisStream: '',
             diagnosisError: null,
@@ -696,6 +702,27 @@ export const useStore = create<Store>()(
           const wb = get().workbench;
           const outputKey = `${stage}Output` as 'materialOutput' | 'frameworkOutput' | 'writingOutput' | 'coachingOutput';
           const savedOutput = wb[outputKey] || '';
+          
+          // 切换阶段时，如果目标阶段有 workbench 输出，自动填充编辑器
+          // 例外：coaching 阶段不覆盖（保留用户正在编辑的文章）
+          // 例外：material 阶段不覆盖（保留用户输入的素材）
+          if (savedOutput && stage !== 'coaching' && stage !== 'material') {
+            const currentId = get().currentArticleId;
+            if (currentId) {
+              const articles = get().articles.map(a =>
+                a.id === currentId ? { ...a, content: savedOutput } : a
+              );
+              set({ 
+                activeStage: stage,
+                diagnosisStream: savedOutput,
+                diagnosisError: null,
+                isStreaming: false,
+                articles,
+              });
+              return;
+            }
+          }
+          
           set({ 
             activeStage: stage,
             diagnosisStream: savedOutput,
@@ -718,6 +745,9 @@ export const useStore = create<Store>()(
             diagnosisStream: content,
           }));
         },
+
+        setWritingMode: (mode: 'expand' | 'append') =>
+          set((s) => ({ workbench: { ...s.workbench, writingMode: mode } })),
 
         // ========================
         // 主题 Actions
@@ -759,19 +789,25 @@ export const useStore = create<Store>()(
               case 'material':
                 apiConfig = {
                   ...state.officialConfig.moonshot,
-                  model: FIXED_MODEL_MAPPING[activeStage] // 锁定为 Moonshot
+                  model: FIXED_MODEL_MAPPING[activeStage] // kimi-k2.6
+                };
+                break;
+              case 'framework':
+                apiConfig = {
+                  ...state.officialConfig.anthropic,
+                  model: FIXED_MODEL_MAPPING[activeStage] // claude-opus-4-6
                 };
                 break;
               case 'writing':
                 apiConfig = {
                   ...state.officialConfig.anthropic,
-                  model: FIXED_MODEL_MAPPING[activeStage] // 锁定为 Claude 3.5 Sonnet
+                  model: FIXED_MODEL_MAPPING[activeStage] // claude-opus-4-6
                 };
                 break;
               case 'coaching':
                 apiConfig = {
                   ...state.officialConfig.openai,
-                  model: FIXED_MODEL_MAPPING[activeStage] // 锁定为 GPT-4o
+                  model: FIXED_MODEL_MAPPING[activeStage] // gpt-5.5
                 };
                 break;
               default:
@@ -867,9 +903,21 @@ export const useStore = create<Store>()(
           } else if (activeStage === 'framework') {
             userContent = `【上一步：素材分析结果】\n${wb.materialOutput || '（请先完成素材分析）'}\n\n【需要构建框架的素材】\n${selectedText}`;
           } else if (activeStage === 'writing') {
-            userContent = `【上一步：文章框架】\n${wb.frameworkOutput || '（请先完成框架构建）'}\n\n【需要展开的段落】\n${selectedText}`;
+            const writingMode = state.workbench.writingMode || 'expand';
+            if (writingMode === 'append') {
+              // 追加模式：将已有全文作为上下文，要求接续写作
+              const existingContent = state.articles.find(a => a.id === state.currentArticleId)?.content?.trim() || selectedText;
+              userContent = `【上一步：文章框架】\n${wb.frameworkOutput || '（请先完成框架构建）'}\n\n【用户已写的内容】\n${existingContent}\n\n【当前模式：追加】请从以上内容结束的地方自然地接续写作。`;
+            } else {
+              userContent = `【上一步：文章框架】\n${wb.frameworkOutput || '（请先完成框架构建）'}\n\n【需要展开的段落】\n${selectedText}`;
+            }
           } else {
-            userContent = `【上一步：展开的初稿】\n${wb.writingOutput || '（请先完成初稿润色）'}\n\n【需要审查的段落】\n${selectedText}`;
+            // coaching 阶段：如果有上一轮教练审查结果，带上它作为上下文
+            if (wb.coachingOutput) {
+              userContent = `【上一步：展开的初稿】\n${wb.writingOutput || '（无）'}\n\n【上一轮教练审查】\n${wb.coachingOutput}\n\n【用户修改后的文本（需要重新审查）】\n${selectedText}\n\n请基于以上上下文进行新一轮审查。注意：用户可能已经根据上一轮建议做了修改，如果修改后的问题确实减少了，评分应反映进步。`;
+            } else {
+              userContent = `【上一步：展开的初稿】\n${wb.writingOutput || '（请先完成初稿润色）'}\n\n【需要审查的段落】\n${selectedText}`;
+            }
           }
           const messages = [
             { role: "system" as const, content: systemContent },
@@ -899,16 +947,27 @@ export const useStore = create<Store>()(
                 const finalStream = get().diagnosisStream;
                 const stage = get().activeStage;
                 // 自动保存到工作台，下一阶段可直接引用
-                set((s) => ({
+                // framework / writing 阶段：自动将输出填入编辑器
+                const updates: any = {
                   isStreaming: false,
                   workbench: {
-                    ...s.workbench,
+                    ...get().workbench,
                     [`${stage}Output`]: finalStream,
-                    completedStages: s.workbench.completedStages.includes(stage)
-                      ? s.workbench.completedStages
-                      : [...s.workbench.completedStages, stage],
+                    completedStages: get().workbench.completedStages.includes(stage)
+                      ? get().workbench.completedStages
+                      : [...get().workbench.completedStages, stage],
                   },
-                }));
+                };
+                // 框架和写作阶段完成后，自动用 AI 输出填充编辑器
+                if ((stage === 'framework' || stage === 'writing') && finalStream) {
+                  const currentId = get().currentArticleId;
+                  if (currentId) {
+                    updates.articles = get().articles.map(a =>
+                      a.id === currentId ? { ...a, content: finalStream } : a
+                    );
+                  }
+                }
+                set(updates);
               },
               onError: (error) => {
                 diagnosisAbortController = null;
