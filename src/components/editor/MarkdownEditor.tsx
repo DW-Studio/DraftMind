@@ -34,6 +34,7 @@ export function MarkdownEditor() {
   );
   const updateArticle = useStore((s) => s.updateArticle);
   const setSelectedText = useStore((s) => s.setSelectedText);
+  const activeStage = useStore((s) => s.activeStage);
 
   // ---- 本地标题状态 ----
   const [localTitle, setLocalTitle] = useState(currentArticle?.title ?? "");
@@ -52,6 +53,8 @@ export function MarkdownEditor() {
   /** 保存最新 currentArticleId 供闭包使用 */
   const articleIdRef = useRef(currentArticleId);
   articleIdRef.current = currentArticleId;
+  /** 跟踪最后一次由编辑器写入 Store 的内容，用于检测外部内容变更 */
+  const lastSyncedContentRef = useRef(currentArticle?.content ?? '');
 
   // ---- 初始化 Milkdown 编辑器（仅挂载时执行一次） ----
   useEffect(() => {
@@ -123,6 +126,22 @@ export function MarkdownEditor() {
     }
   }, [currentArticleId, currentArticle]);
 
+  // ---- 检测外部内容变更（如 AI 完成后自动填充编辑器）----
+  useEffect(() => {
+    const externalContent = currentArticle?.content ?? '';
+    if (
+      externalContent &&
+      externalContent !== lastSyncedContentRef.current &&
+      editorRef.current
+    ) {
+      lastSyncedContentRef.current = externalContent;
+      isInternalChange.current = true;
+      editorRef.current.action(replaceAll(externalContent, true));
+      isInternalChange.current = false;
+      setHasLocalContent(true);
+    }
+  }, [currentArticle?.content]);
+
   // ---- 防抖同步 ----
   const titleDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const contentDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -145,6 +164,7 @@ export function MarkdownEditor() {
       contentDebounceRef.current = setTimeout(() => {
         if (articleIdRef.current) {
           updateArticle(articleIdRef.current, { content: markdown });
+          lastSyncedContentRef.current = markdown;
         }
       }, DEBOUNCE_MS);
     },
@@ -220,7 +240,9 @@ export function MarkdownEditor() {
   // ---- 最后保存时间 ----
   const lastSavedText = useMemo(() => {
     if (!currentArticle?.updatedAt) return "";
-    return new Date(currentArticle.updatedAt).toLocaleTimeString("zh-CN", {
+    return new Date(currentArticle.updatedAt).toLocaleString("zh-CN", {
+      month: "2-digit",
+      day: "2-digit",
       hour: "2-digit",
       minute: "2-digit",
     });
@@ -252,6 +274,15 @@ export function MarkdownEditor() {
     
     return cjk + en;
   }, [currentArticle?.content]);
+
+  // ---- 阶段上下文提示 ----
+  const stageContext = {
+    material:  { icon: '📥', label: '素材输入区', hint: '在此粘贴或撰写你的原始素材、想法、引用。AI 会在右侧进行压力测试。' },
+    framework: { icon: '📋', label: '框架审核区', hint: '右侧 AI 已生成文章结构。审核后如有需要，可在此补充调整。' },
+    writing:   { icon: '✍️', label: '写作区', hint: '在此撰写正文。划选段落后点击右侧诊断，AI 按设定文风展开。' },
+    coaching:  { icon: '🔍', label: '审查区', hint: '在此修改文本。右侧教练会审查并评分，直到可以发布。' },
+  } as const;
+  const ctx = stageContext[activeStage];
 
   // ---- 空状态 ----
   if (!currentArticle) {
@@ -312,6 +343,15 @@ export function MarkdownEditor() {
           Markdown 实时渲染 · {wordCount} 字 · 最后保存：{lastSavedText}
         </p>
       </header>
+
+      {/* ---- 阶段引导条：始终可见，提示当前阶段编辑器用途 ---- */}
+      <div className="flex-shrink-0 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/30 px-6 py-2">
+        <div className="flex items-center gap-2">
+          <span className="text-sm">{ctx.icon}</span>
+          <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">{ctx.label}</span>
+          <span className="text-xs text-zinc-400 dark:text-zinc-500">· {ctx.hint}</span>
+        </div>
+      </div>
 
       {/* ---- 编辑器区域容器（相对定位）---- */}
       <div className="flex-1 min-h-0 relative">

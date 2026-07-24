@@ -184,6 +184,8 @@ export interface StoreState {
     completedStages: WorkflowStage[];
     /** 用户选定的文章意图，影响所有阶段的 prompt 行为 */
     articleIntent: string | null;
+    /** 写作阶段模式：expand=展开段落, append=接续写作 */
+    writingMode: 'expand' | 'append';
   };
 }
 
@@ -280,6 +282,8 @@ export interface StoreActions {
   setArticleIntent: (intent: string) => void;
   /** 原地编辑：更新指定阶段的工作台输出 */
   updateWorkbenchOutput: (stage: WorkflowStage, content: string) => void;
+  /** 切换写作阶段模式（展开段落 / 接续写作） */
+  setWritingMode: (mode: 'expand' | 'append') => void;
 
   // --- AI 诊断 ---
   /** 发起流式诊断请求（自动熔断旧请求、清空上次结果） */

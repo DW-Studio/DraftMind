@@ -64,6 +64,7 @@ export function AIPanel() {
   // ---- 写作工作台 ----
   const workbench = useStore((s) => s.workbench);
   const setArticleIntent = useStore((s) => s.setArticleIntent);
+  const setWritingMode = useStore((s) => s.setWritingMode);
   const stages: WorkflowStage[] = ['material', 'framework', 'writing', 'coaching'];
   const activeStageIndex = stages.indexOf(activeStage);
   const stageLabels: Record<WorkflowStage, string> = {
@@ -276,10 +277,7 @@ export function AIPanel() {
           
           {!isEditingThis && (
             <>
-              <ClearDiagnosisButton onClick={clearDiagnosis} />
-              <p className="mt-2 text-xs text-zinc-400 dark:text-zinc-500">
-                💡 建议审核 AI 输出，编辑修改后再进入下一阶段
-              </p>
+              {/* 主操作区：直接进入下一阶段 */}
               {activeStageIndex < stages.length - 1 && (() => {
                 const nextStage = stages[activeStageIndex + 1];
                 const nextStageDone = workbench.completedStages.includes(nextStage);
@@ -293,7 +291,6 @@ export function AIPanel() {
                         clearDiagnosis();
                         setActiveStage(nextStage);
                         const textToAnalyze = selectedText || currentArticle?.content?.trim() || '';
-                        // 检查当前阶段是否有 workbench 输出作为上下文
                         const hasWbContext =
                           (activeStage === 'material' && !!workbench.materialOutput) ||
                           (activeStage === 'framework' && !!workbench.frameworkOutput) ||
@@ -305,7 +302,7 @@ export function AIPanel() {
                         }
                       }
                     }}
-                    className={`mt-2 w-full rounded-md px-4 py-2.5 text-sm font-semibold text-white transition-colors ${
+                    className={`mt-3 w-full rounded-md px-4 py-2.5 text-sm font-semibold text-white transition-colors ${
                       nextStageDone
                         ? 'bg-emerald-600 hover:bg-emerald-700'
                         : 'bg-blue-600 hover:bg-blue-700'
@@ -315,6 +312,29 @@ export function AIPanel() {
                   </button>
                 );
               })()}
+
+              {/* 次要操作：手动调整 + 重新诊断 */}
+              <div className="mt-2 flex items-center justify-between">
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setEditDraft(diagnosisStream);
+                      setEditingStage(activeStage);
+                    }}
+                    className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
+                  >
+                    ✏️ 手动调整
+                  </button>
+                  <button
+                    onClick={handleDiagnose}
+                    disabled={isStreaming}
+                    className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
+                  >
+                    🔄 重新分析
+                  </button>
+                </div>
+                <ClearDiagnosisButton onClick={clearDiagnosis} />
+              </div>
             </>
           )}
         </div>
@@ -367,10 +387,42 @@ export function AIPanel() {
           </>
         )}
         {activeStage === 'writing' && (
-          <>
-            <p className="text-sm text-zinc-400 dark:text-zinc-500">段落展开</p>
-            <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">👉 在编辑器中指定要展开的段落，AI 按设定文风扩展为完整初稿。</p>
-          </>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                {workbench.writingMode === 'append' ? '接续写作' : '段落展开'}
+              </span>
+              {/* 模式切换 */}
+              <div className="flex rounded-md bg-zinc-100 dark:bg-zinc-800 p-0.5 text-xs">
+                <button
+                  onClick={() => setWritingMode('expand')}
+                  className={`rounded px-2 py-1 font-medium transition-colors ${
+                    workbench.writingMode === 'expand'
+                      ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm'
+                      : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+                  }`}
+                >
+                  📝 展开
+                </button>
+                <button
+                  onClick={() => setWritingMode('append')}
+                  className={`rounded px-2 py-1 font-medium transition-colors ${
+                    workbench.writingMode === 'append'
+                      ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm'
+                      : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+                  }`}
+                >
+                  ➕ 追加
+                </button>
+              </div>
+            </div>
+            <p className="text-xs text-zinc-400 dark:text-zinc-500">
+              {workbench.writingMode === 'append'
+                ? '👉 AI 会基于你已写的内容，从停笔处自然地接续写作。'
+                : '👉 在编辑器中指定要展开的段落，AI 按设定文风扩展为完整初稿。'
+              }
+            </p>
+          </div>
         )}
         {activeStage === 'coaching' && (
           <>
